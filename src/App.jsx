@@ -239,17 +239,14 @@ const createNewChat = () => {
   };
 
   // SEND MESSAGE
- const sendMessage = async () => {
-console.log("currentChatId:", currentChatId);
+  const sendMessage = async () => {
+
   if (!currentChatId) {
     alert("Please click New Chat first");
     return;
   }
 
-  if (
-    !message.trim() &&
-    !selectedImage
-  ) return;
+  if (!message.trim() && !selectedImage) return;
 
   const currentMessage = message;
 
@@ -272,23 +269,27 @@ console.log("currentChatId:", currentChatId);
 
   try {
 
-   const API_URL =
-  window.location.hostname === "localhost"
-    ? "http://localhost:5000/chat"
-    : "https://ai-demo-api-b2z5.onrender.com/chat";
+    const isLocal =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
 
-const response = await fetch(API_URL, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
- body: JSON.stringify({
-  messages: updatedUserMessages,
-}),
-});
+    const API_URL = isLocal
+      ? "http://localhost:5000/chat"
+      : "https://ai-demo-new-1.onrender.com/chat";
 
-    const data =
-      await response.json();
+    console.log("API URL:", API_URL);
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: updatedUserMessages,
+      }),
+    });
+
+    const data = await response.json();
 
     const aiMessage = {
       role: "assistant",
@@ -302,38 +303,27 @@ const response = await fetch(API_URL, {
 
     setMessages(updatedMessages);
 
-    setAllChats((prev) => {
+    setAllChats((prev) =>
+      prev.map((chat) => {
 
-      const newTitle =
-        currentMessage
-          .trim()
-          .slice(0, 30) ||
-        "New Chat";
-
-      return prev.map((chat) => {
-
-        if (
-          chat.id ===
-          currentChatId
-        ) {
+        if (chat.id === currentChatId) {
 
           return {
             ...chat,
-
             title:
-              chat.title ===
-              "New Chat"
-                ? newTitle
+              chat.title === "New Chat"
+                ? currentMessage
+                    .trim()
+                    .slice(0, 30)
                 : chat.title,
-
             messages:
               updatedMessages,
           };
         }
 
         return chat;
-      });
-    });
+      })
+    );
 
   } catch (error) {
 

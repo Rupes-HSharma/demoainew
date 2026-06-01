@@ -37,11 +37,6 @@ app.get("/", (req, res) => {
  app.post("/chat", async (req, res) => {
   try {
 
-    console.log(
-      "BODY:",
-      JSON.stringify(req.body, null, 2)
-    );
-
     const { messages } = req.body;
 
     if (
@@ -54,15 +49,43 @@ app.get("/", (req, res) => {
       });
     }
 
+    console.log(
+      "Messages Count:",
+      messages.length
+    );
+
     const response =
       await groq.chat.completions.create({
 
-        messages: messages.map(
-          (msg) => ({
+        messages: [
+
+          {
+            role: "system",
+            content: `
+You are a helpful AI assistant.
+
+Always remember previous conversation messages.
+
+If the user says:
+- same code
+- continue
+- add css
+- add bootstrap
+- fix error
+- update code
+- modify this
+
+Then use previous messages as context.
+
+Never ignore earlier chat history.
+`,
+          },
+
+          ...messages.map((msg) => ({
             role: msg.role,
             content: msg.content,
-          })
-        ),
+          })),
+        ],
 
         model:
           "llama-3.3-70b-versatile",
@@ -80,10 +103,7 @@ app.get("/", (req, res) => {
 
   } catch (error) {
 
-    console.log(
-      "ERROR:",
-      error
-    );
+    console.log(error);
 
     res.status(500).json({
       error:
