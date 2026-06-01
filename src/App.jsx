@@ -269,15 +269,15 @@ const createNewChat = () => {
 
   try {
 
-    const isLocal =
+    // API URL
+    const API_URL =
       window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
+      window.location.hostname === "127.0.0.1"
+        ? "http://localhost:5000/chat"
+        : "https://ai-demo-new-1.onrender.com/chat";
 
-    const API_URL = isLocal
-      ? "http://localhost:5000/chat"
-      : "https://ai-demo-new-1.onrender.com/chat";
-
-    console.log("API URL:", API_URL);
+    console.log("HOST:", window.location.hostname);
+    console.log("API:", API_URL);
 
     const response = await fetch(API_URL, {
       method: "POST",
@@ -288,6 +288,12 @@ const createNewChat = () => {
         messages: updatedUserMessages,
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(
+        `HTTP Error: ${response.status}`
+      );
+    }
 
     const data = await response.json();
 
@@ -310,12 +316,14 @@ const createNewChat = () => {
 
           return {
             ...chat,
+
             title:
               chat.title === "New Chat"
                 ? currentMessage
                     .trim()
                     .slice(0, 30)
                 : chat.title,
+
             messages:
               updatedMessages,
           };
@@ -327,7 +335,7 @@ const createNewChat = () => {
 
   } catch (error) {
 
-    console.log(error);
+    console.error(error);
 
     setMessages((prev) => [
       ...prev,
