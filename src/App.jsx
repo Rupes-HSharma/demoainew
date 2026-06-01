@@ -239,14 +239,17 @@ const createNewChat = () => {
   };
 
   // SEND MESSAGE
-  const sendMessage = async () => {
-
+ const sendMessage = async () => {
+console.log("currentChatId:", currentChatId);
   if (!currentChatId) {
     alert("Please click New Chat first");
     return;
   }
 
-  if (!message.trim() && !selectedImage) return;
+  if (
+    !message.trim() &&
+    !selectedImage
+  ) return;
 
   const currentMessage = message;
 
@@ -269,30 +272,23 @@ const createNewChat = () => {
 
   try {
 
-    // API URL
    const API_URL =
-  "https://ai-demo-new-1.onrender.com/chat";
+  window.location.hostname === "localhost"
+    ? "http://localhost:5000/chat"
+    : "https://ai-demo-api-b2z5.onrender.com/chat";
 
-    console.log("HOST:", window.location.hostname);
-    console.log("API:", API_URL);
+const response = await fetch(API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+ body: JSON.stringify({
+  messages: updatedUserMessages,
+}),
+});
 
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: updatedUserMessages,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `HTTP Error: ${response.status}`
-      );
-    }
-
-    const data = await response.json();
+    const data =
+      await response.json();
 
     const aiMessage = {
       role: "assistant",
@@ -306,19 +302,28 @@ const createNewChat = () => {
 
     setMessages(updatedMessages);
 
-    setAllChats((prev) =>
-      prev.map((chat) => {
+    setAllChats((prev) => {
 
-        if (chat.id === currentChatId) {
+      const newTitle =
+        currentMessage
+          .trim()
+          .slice(0, 30) ||
+        "New Chat";
+
+      return prev.map((chat) => {
+
+        if (
+          chat.id ===
+          currentChatId
+        ) {
 
           return {
             ...chat,
 
             title:
-              chat.title === "New Chat"
-                ? currentMessage
-                    .trim()
-                    .slice(0, 30)
+              chat.title ===
+              "New Chat"
+                ? newTitle
                 : chat.title,
 
             messages:
@@ -327,12 +332,12 @@ const createNewChat = () => {
         }
 
         return chat;
-      })
-    );
+      });
+    });
 
   } catch (error) {
 
-    console.error(error);
+    console.log(error);
 
     setMessages((prev) => [
       ...prev,

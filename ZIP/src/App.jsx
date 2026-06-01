@@ -3,76 +3,57 @@ import Webcam from "react-webcam";
 import "./App.css";
 
 function App() {
-
-  const [message, setMessage] =
-    useState("");
-
-  const [reply, setReply] =
-    useState("");
-
-  const [imagePrompt, setImagePrompt] =
-    useState("");
-
-  const [image, setImage] =
-    useState("");
-
-  const [voiceText, setVoiceText] =
-    useState("");
+  const [message, setMessage] = useState("");
+  const [reply, setReply] = useState("");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [image, setImage] = useState("");
+  const [voiceText, setVoiceText] = useState("");
 
   const webcamRef = useRef(null);
 
+  // API URL
+  const API_BASE =
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : "https://ai-demo-new-1.onrender.com";
 
   // CHAT
   const sendMessage = async () => {
-
     try {
-
       setReply("Loading...");
 
-      const response = await fetch(
-        "http://localhost:5000/chat",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            message,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message,
+        }),
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error);
       }
 
       setReply(data.reply);
-
     } catch (error) {
-
       console.log(error);
-
-      setReply(error.message);
+      setReply(error.message || "Error");
     }
   };
 
-
   // IMAGE GENERATOR
   const generateImage = async () => {
-
     try {
-
       const response = await fetch(
-        "http://localhost:5000/generate-image",
+        `${API_BASE}/generate-image`,
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             prompt: imagePrompt,
@@ -80,31 +61,23 @@ function App() {
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error);
       }
 
       setImage(data.image);
-
     } catch (error) {
-
       console.log(error);
-
       alert(error.message);
     }
   };
 
-
   // VOICE
   const handleVoice = async (e) => {
-
     try {
-
-      const formData =
-        new FormData();
+      const formData = new FormData();
 
       formData.append(
         "audio",
@@ -112,34 +85,28 @@ function App() {
       );
 
       const response = await fetch(
-        "http://localhost:5000/voice",
+        `${API_BASE}/voice`,
         {
           method: "POST",
           body: formData,
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error);
       }
 
       setVoiceText(data.text);
-
     } catch (error) {
-
       console.log(error);
-
       alert(error.message);
     }
   };
 
-
   // FACE CAPTURE
   const capture = () => {
-
     const imageSrc =
       webcamRef.current.getScreenshot();
 
@@ -148,17 +115,12 @@ function App() {
     alert("Face Captured");
   };
 
-
   return (
-
     <div className="container">
-
       <h1>AI Demo App</h1>
-
 
       {/* CHATBOT */}
       <div className="card">
-
         <h2>AI Chatbot</h2>
 
         <input
@@ -166,31 +128,22 @@ function App() {
           placeholder="Ask something..."
           value={message}
           onChange={(e) =>
-            setMessage(
-              e.target.value
-            )
+            setMessage(e.target.value)
           }
         />
 
-        <button
-          onClick={sendMessage}
-        >
+        <button onClick={sendMessage}>
           Send
         </button>
 
         <div className="output">
           {reply}
         </div>
-
       </div>
-
 
       {/* IMAGE */}
       <div className="card">
-
-        <h2>
-          AI Image Generator
-        </h2>
+        <h2>AI Image Generator</h2>
 
         <input
           type="text"
@@ -203,27 +156,21 @@ function App() {
           }
         />
 
-        <button
-          onClick={generateImage}
-        >
+        <button onClick={generateImage}>
           Generate
         </button>
 
-        {
-          image &&
+        {image && (
           <img
             src={image}
             alt="AI"
             className="image"
           />
-        }
-
+        )}
       </div>
-
 
       {/* VOICE */}
       <div className="card">
-
         <h2>Voice To Text</h2>
 
         <input
@@ -235,16 +182,11 @@ function App() {
         <div className="output">
           {voiceText}
         </div>
-
       </div>
-
 
       {/* FACE */}
       <div className="card">
-
-        <h2>
-          Face Detection
-        </h2>
+        <h2>Face Detection</h2>
 
         <Webcam
           ref={webcamRef}
@@ -252,14 +194,10 @@ function App() {
           className="webcam"
         />
 
-        <button
-          onClick={capture}
-        >
+        <button onClick={capture}>
           Capture Face
         </button>
-
       </div>
-
     </div>
   );
 }
