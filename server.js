@@ -34,8 +34,13 @@ app.get("/", (req, res) => {
 
 
 // CHAT API
-app.post("/chat", async (req, res) => {
+ app.post("/chat", async (req, res) => {
   try {
+
+    console.log(
+      "BODY:",
+      JSON.stringify(req.body, null, 2)
+    );
 
     const { messages } = req.body;
 
@@ -49,7 +54,6 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // AI RESPONSE
     const response =
       await groq.chat.completions.create({
 
@@ -68,7 +72,6 @@ app.post("/chat", async (req, res) => {
         max_tokens: 4096,
       });
 
-    // SEND RESPONSE
     res.json({
       reply:
         response.choices[0]
@@ -77,7 +80,10 @@ app.post("/chat", async (req, res) => {
 
   } catch (error) {
 
-    console.log(error);
+    console.log(
+      "ERROR:",
+      error
+    );
 
     res.status(500).json({
       error:
