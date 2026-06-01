@@ -270,11 +270,8 @@ const createNewChat = () => {
   try {
 
     // API URL
-    const API_URL =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1"
-        ? "http://localhost:5000/chat"
-        : "https://ai-demo-new-1.onrender.com/chat";
+   const API_URL =
+  "https://ai-demo-new-1.onrender.com/chat";
 
     console.log("HOST:", window.location.hostname);
     console.log("API:", API_URL);
