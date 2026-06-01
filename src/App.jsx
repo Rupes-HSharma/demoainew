@@ -282,9 +282,9 @@ const response = await fetch(API_URL, {
   headers: {
     "Content-Type": "application/json",
   },
-  body: JSON.stringify({
-    message: currentMessage,
-  }),
+ body: JSON.stringify({
+  messages: updatedUserMessages,
+}),
 });
 
     const data =

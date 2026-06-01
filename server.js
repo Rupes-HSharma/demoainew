@@ -34,80 +34,58 @@ app.get("/", (req, res) => {
 
 
 // CHAT API
-app.post(
-  "/chat",
-  async (req, res) => {
+app.post("/chat", async (req, res) => {
+  try {
 
-    try {
+    const { messages } = req.body;
 
-      const { message } =
-        req.body;
-
-      if (!message) {
-
-        return res
-          .status(400)
-          .json({
-            error:
-              "Message required",
-          });
-      }
-
-
-      // ADVANCED PROMPT
-      const prompt = `
-
- 
-
-User Input:
-${message}
-
-`;
-
-
-      // AI RESPONSE
-      const response =
-        await groq.chat.completions.create({
-
-          messages: [
-            {
-              role: "user",
-
-              content:
-                prompt,
-            },
-          ],
-
-          model:
-            "llama-3.3-70b-versatile",
-
-          temperature: 0.7,
-
-          max_tokens: 4096,
-        });
-
-
-      // SEND RESPONSE
-      res.json({
-
-        reply:
-          response.choices[0]
-            .message.content,
-      });
-
-    } catch (error) {
-
-      console.log(error);
-
-      res.status(500).json({
-
-        error:
-          error.message ||
-          "Server Error",
+    if (
+      !messages ||
+      !Array.isArray(messages) ||
+      messages.length === 0
+    ) {
+      return res.status(400).json({
+        error: "Messages required",
       });
     }
+
+    // AI RESPONSE
+    const response =
+      await groq.chat.completions.create({
+
+        messages: messages.map(
+          (msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })
+        ),
+
+        model:
+          "llama-3.3-70b-versatile",
+
+        temperature: 0.7,
+
+        max_tokens: 4096,
+      });
+
+    // SEND RESPONSE
+    res.json({
+      reply:
+        response.choices[0]
+          .message.content,
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      error:
+        error.message ||
+        "Server Error",
+    });
   }
-);
+});
 
 
 // IMAGE GENERATOR
