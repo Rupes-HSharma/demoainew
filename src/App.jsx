@@ -272,19 +272,20 @@ console.log("currentChatId:", currentChatId);
 
   try {
 
-    const response = await fetch(
-      "https://ai-demo-api-b2z5.onrender.com/chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          message: currentMessage,
-        }),
-      }
-    );
+   const API_URL =
+  window.location.hostname === "localhost"
+    ? "http://localhost:5000/chat"
+    : "https://ai-demo-api-b2z5.onrender.com/chat";
+
+const response = await fetch(API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    message: currentMessage,
+  }),
+});
 
     const data =
       await response.json();
