@@ -148,34 +148,40 @@ function App() {
 
 
   // NEW CHAT
-  const createNewChat = () => {
+const createNewChat = () => {
 
-    const newChat = {
+  const newId = Date.now();
 
-      id: Date.now(),
-
-      title: "New Chat",
-
-      messages: [],
-    };
-
-    setAllChats((prev) => [
-
-      newChat,
-
-      ...prev,
-    ]);
-
-    setCurrentChatId(
-      newChat.id
-    );
-
-    setMessages([]);
-
-    setMessage("");
-
-    setSelectedImage(null);
+  const newChat = {
+    id: newId,
+    title: "New Chat",
+    messages: [],
   };
+
+  const updatedChats = [
+    newChat,
+    ...allChats,
+  ];
+
+  setAllChats(updatedChats);
+
+  setCurrentChatId(newId);
+
+  setMessages([]);
+
+  localStorage.setItem(
+    "all-ai-chats",
+    JSON.stringify(updatedChats)
+  );
+
+  localStorage.setItem(
+    "active-chat-id",
+    newId.toString()
+  );
+
+  setMessage("");
+  setSelectedImage(null);
+};
 
 
   // DELETE CHAT
@@ -232,180 +238,118 @@ function App() {
     }
   };
 
-
-
-
   // SEND MESSAGE
-  const sendMessage = async () => {
+ const sendMessage = async () => {
+console.log("currentChatId:", currentChatId);
+  if (!currentChatId) {
+    alert("Please click New Chat first");
+    return;
+  }
 
-    if (
-      !message.trim() &&
-      !selectedImage
-    ) return;
+  if (
+    !message.trim() &&
+    !selectedImage
+  ) return;
 
-    const currentMessage =
-      message;
+  const currentMessage = message;
 
-    const userMessage = {
+  const userMessage = {
+    role: "user",
+    content: currentMessage,
+    image: selectedImage?.preview,
+  };
 
-      role: "user",
+  const updatedUserMessages = [
+    ...messages,
+    userMessage,
+  ];
 
-      content: currentMessage,
+  setMessages(updatedUserMessages);
 
-      image:
-        selectedImage?.preview,
-    };
+  setMessage("");
+  setSelectedImage(null);
+  setLoading(true);
 
-    const updatedUserMessages = [
+  try {
 
-      ...messages,
-
-      userMessage,
-    ];
-
-    setMessages(
-      updatedUserMessages
+    const response = await fetch(
+      "https://ai-demo-api-b2z5.onrender.com/chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          message: currentMessage,
+        }),
+      }
     );
 
-    setMessage("");
+    const data =
+      await response.json();
 
-    setSelectedImage(null);
+    const aiMessage = {
+      role: "assistant",
+      content: data.reply,
+    };
 
-    setLoading(true);
+    const updatedMessages = [
+      ...updatedUserMessages,
+      aiMessage,
+    ];
 
-    try {
+    setMessages(updatedMessages);
 
-      const response = await fetch(
-        "http://localhost:5000/chat",
-        {
-          method: "POST",
+    setAllChats((prev) => {
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+      const newTitle =
+        currentMessage
+          .trim()
+          .slice(0, 30) ||
+        "New Chat";
 
-          body: JSON.stringify({
-            message:
-              currentMessage,
-          }),
-        }
-      );
+      return prev.map((chat) => {
 
-      const data =
-        await response.json();
+        if (
+          chat.id ===
+          currentChatId
+        ) {
 
-      const aiMessage = {
+          return {
+            ...chat,
 
-        role: "assistant",
-
-        content: data.reply,
-      };
-
-      const updatedMessages = [
-
-        ...updatedUserMessages,
-
-        aiMessage,
-      ];
-
-      setMessages(
-        updatedMessages
-      );
-
-
-      // UPDATE HISTORY
-      setAllChats((prev) => {
-
-        const newTitle =
-
-          currentMessage
-            .trim()
-            .slice(0, 30) ||
-
-          "New Chat";
-
-
-        const chatExists =
-          prev.find(
-            (chat) =>
-              chat.id ===
-              currentChatId
-          );
-
-
-        // UPDATE OLD CHAT
-        if (chatExists) {
-
-          return prev.map((chat) => {
-
-            if (
-              chat.id ===
-              currentChatId
-            ) {
-
-              return {
-
-                ...chat,
-
-                title:
-
-                  chat.title ===
-                    "New Chat"
-
-                    ? newTitle
-
-                    : chat.title,
-
-                messages:
-                  updatedMessages,
-              };
-            }
-
-            return chat;
-          });
-        }
-
-
-        // CREATE NEW CHAT
-        return [
-
-          {
-            id:
-              currentChatId ||
-
-              Date.now(),
-
-            title: newTitle,
+            title:
+              chat.title ===
+              "New Chat"
+                ? newTitle
+                : chat.title,
 
             messages:
               updatedMessages,
-          },
+          };
+        }
 
-          ...prev,
-        ];
+        return chat;
       });
+    });
 
-    } catch (error) {
+  } catch (error) {
 
-      console.log(error);
+    console.log(error);
 
-      setMessages((prev) => [
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content:
+          "Error fetching response",
+      },
+    ]);
+  }
 
-        ...prev,
-
-        {
-          role: "assistant",
-
-          content:
-            "Error fetching response",
-        },
-      ]);
-    }
-
-    setLoading(false);
-  };
-
+  setLoading(false);
+};
 
   // ENTER
   const handleKeyDown = (e) => {
