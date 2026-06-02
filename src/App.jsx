@@ -275,7 +275,7 @@ console.log("currentChatId:", currentChatId);
    const API_URL =
   window.location.hostname === "localhost"
     ? "http://localhost:5000/chat"
-    : "https://ai-demo-api-b2z5.onrender.com/chat";
+    : "https://ai-demo-new-1.onrender.com/chat";
 
 const response = await fetch(API_URL, {
   method: "POST",
