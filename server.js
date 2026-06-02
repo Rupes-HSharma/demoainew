@@ -16,7 +16,7 @@ app.use(
   })
 );
 
-
+console.log("GROQ KEY EXISTS:", !!process.env.GROQ_API_KEY);
 // GROQ CLIENT
 const groq = new Groq({
   apiKey:
