@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-   "build": "vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@tavily/core": "^0.7.5",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

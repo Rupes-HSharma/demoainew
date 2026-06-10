@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
+import { TavilyClient } from "@tavily/core";
 
 dotenv.config();
 
@@ -21,6 +22,10 @@ console.log("GROQ KEY EXISTS:", !!process.env.GROQ_API_KEY);
 const groq = new Groq({
   apiKey:
     process.env.GROQ_API_KEY,
+});
+
+const tavily = new TavilyClient({
+  apiKey: process.env.TAVILY_API_KEY,
 });
 
 
@@ -49,10 +54,38 @@ app.get("/", (req, res) => {
       });
     }
 
-    console.log(
-      "Messages Count:",
-      messages.length
-    );
+    const latestQuestion =
+      messages[messages.length - 1]
+        ?.content || "";
+
+    let searchContext = "";
+
+    try {
+
+      const searchResults =
+        await tavily.search(
+          latestQuestion,
+          {
+            searchDepth: "advanced",
+            maxResults: 5,
+          }
+        );
+
+      searchContext =
+        searchResults.results
+          ?.map(
+            (r) =>
+              `${r.title}\n${r.content}`
+          )
+          .join("\n\n");
+
+    } catch (searchError) {
+
+      console.log(
+        "Tavily Error:",
+        searchError
+      );
+    }
 
     const response =
       await groq.chat.completions.create({
@@ -62,22 +95,17 @@ app.get("/", (req, res) => {
           {
             role: "system",
             content: `
-You are a helpful AI assistant.
+You are an expert AI assistant.
 
-Always remember previous conversation messages.
+Use the search results below if available.
 
-If the user says:
-- same code
-- continue
-- add css
-- add bootstrap
-- fix error
-- update code
-- modify this
+SEARCH RESULTS:
+${searchContext}
 
-Then use previous messages as context.
+Provide accurate and detailed answers.
 
-Never ignore earlier chat history.
+If search results are available,
+use them as the primary source.
 `,
           },
 
@@ -90,7 +118,7 @@ Never ignore earlier chat history.
         model:
           "llama-3.3-70b-versatile",
 
-        temperature: 0.7,
+        temperature: 0.2,
 
         max_tokens: 4096,
       });
