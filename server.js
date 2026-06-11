@@ -4,7 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";
-// import Tavily from "@tavily/core";
+
 
 dotenv.config();
 
@@ -29,12 +29,7 @@ const tvly = tavily({
   apiKey: process.env.TAVILY_API_KEY,
 });
 
-const result = await tvly.search("director name of triotree technology noida");
 
-console.log(result);
-//const tavily = new Tavily({
-  // apiKey: process.env.TAVILY_API_KEY,
-//});
 
 
 // TEST API
@@ -70,14 +65,14 @@ app.get("/", (req, res) => {
 
     try {
 
-      const searchResults =
-        await tavily.search(
-          latestQuestion,
-          {
-            searchDepth: "advanced",
-            maxResults: 5,
-          }
-        );
+     const searchResults =
+  await tvly.search(
+    latestQuestion,
+    {
+      searchDepth: "advanced",
+      maxResults: 5,
+    }
+  );
 
       searchContext =
         searchResults.results
