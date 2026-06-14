@@ -286,6 +286,10 @@ const response = await fetch(API_URL, {
   messages: updatedUserMessages,
 }),
 });
+if (!response.ok) {
+  const err = await response.text();
+  throw new Error(err);
+}
 
     const data =
       await response.json();
@@ -643,9 +647,7 @@ const response = await fetch(API_URL, {
 
                         {
 
-                          msg.content?.includes(
-
-                          )
+                         msg.content?.includes("```")
 
                             ? msg.content
                               .split(
