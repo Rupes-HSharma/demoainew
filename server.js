@@ -62,9 +62,32 @@ app.post("/chat", async (req, res) => {
         ?.content || "";
 
         let searchQuery = latestQuestion;
+        let companyName = "TrioTree Technologies";
+
+        if (
+  latestQuestion.toLowerCase().includes("director")
+) {
+  searchQuery =
+    `${companyName} directors MCA Zaubacorp company directors`;
+}
+
+else if (
+  latestQuestion.toLowerCase().includes("address") ||
+  latestQuestion.toLowerCase().includes("location")
+) {
+  searchQuery =
+    `${companyName} registered office address MCA`;
+}
+
+else if (
+  latestQuestion.toLowerCase().includes("employee")
+) {
+  searchQuery =
+    `${companyName} employee count linkedin tracxn`;
+}
 
 // follow-up company questions
-// follow-up company questions
+ 
 if (
   messages.length > 1 &&
   (
@@ -76,7 +99,12 @@ if (
     latestQuestion.toLowerCase().includes("director") ||
     latestQuestion.toLowerCase().includes("contact") ||
     latestQuestion.toLowerCase().includes("phone") ||
-    latestQuestion.toLowerCase().includes("email")
+    latestQuestion.toLowerCase().includes("email")||
+    latestQuestion.toLowerCase().includes("type") ||
+    latestQuestion.toLowerCase().includes("industry") ||
+    latestQuestion.toLowerCase().includes("business") ||
+    latestQuestion.toLowerCase().includes("work") ||
+    latestQuestion.toLowerCase().includes("services")
   )
 ) {
   const previousContext = messages
@@ -84,23 +112,86 @@ if (
     .map((m) => m.content)
     .join(" ");
 
+  // detect company name from conversation
+  const companyName =
+    previousContext.match(
+      /triotree technologies?/i
+    )?.[0] || "";
+    if (
+  latestQuestion.toLowerCase().includes("type")
+) {
   searchQuery =
-    previousContext + " " + latestQuestion;
+    `${companyName} industry business healthcare IT services company profile`;
+}
+
+  if (latestQuestion.toLowerCase().includes("director")) {
+    searchQuery =
+      `${companyName} directors MCA Zaubacorp`;
+  } else if (
+    latestQuestion.toLowerCase().includes("employee")
+  ) {
+    searchQuery =
+      `${companyName} employee count linkedin tracxn`;
+  } else if (
+    latestQuestion.toLowerCase().includes("address") ||
+    latestQuestion.toLowerCase().includes("location")
+  ) {
+    searchQuery =
+      `${companyName} registered office address company headquarters`;
+  } else {
+    searchQuery =
+      previousContext + " " + latestQuestion;
+  }
 }
 
     let searchContext = "";
 
     try {
 
-  const searchResults = await tvly.search(
-  latestQuestion,
+ const searchResults = await tvly.search(
+  searchQuery,
   {
     searchDepth: "advanced",
-    maxResults: 3,
+    maxResults: 10,
+
+    includeDomains: [
+      "zaubacorp.com",
+      "thecompanycheck.com",
+      "tracxn.com",
+      "crunchbase.com",
+      "linkedin.com"
+    ]
   }
 );
 
+console.log("SEARCH QUERY:", searchQuery);
+
+console.log(
+  JSON.stringify(
+    searchResults.results,
+    null,
+    2
+  )
+);
+
 console.log("QUESTION:", latestQuestion);
+
+let companyName = "";
+
+const previousContext = messages
+  .slice(-6)
+  .map((m) => m.content)
+  .join(" ");
+
+if (
+  previousContext
+    .toLowerCase()
+    .includes("triotree")
+) {
+  companyName =
+    "TrioTree Technologies";
+}
+
 searchResults.results?.forEach((r, i) => {
   console.log(`\n===== RESULT ${i + 1} =====`);
   console.log("TITLE:", r.title);
@@ -116,13 +207,22 @@ console.log(
   )
 );
 console.log("====================================");
-   searchContext =
+  searchContext =
   searchResults.results
-    ?.map(
-      (r) =>
-        `Title: ${r.title}
-URL: ${r.url}
-Content: ${r.content}`
+    ?.slice(0, 5)
+    .map(
+      (r, i) => `
+SOURCE ${i + 1}
+
+TITLE:
+${r.title}
+
+URL:
+${r.url}
+
+CONTENT:
+${r.content}
+`
     )
     .join("\n\n");
 
@@ -165,6 +265,49 @@ For company information:
 - Do not choose one address unless all sources agree.
 - If directors are found, list every director found.
 
+DIRECTOR RULES:
+
+- Only list people explicitly identified as Directors.
+- Do NOT treat:
+  - CEO
+  - Founder
+  - COO
+  - VP
+  - President
+  - CGO
+  - Managers
+as Directors unless the source explicitly says they are Directors.
+
+- For Indian companies, prefer MCA and ZaubaCorp director records over leadership pages.
+
+EMPLOYEE COUNT RULES:
+
+- Prefer LinkedIn and Tracxn employee counts.
+- If multiple counts exist, show all counts.
+- Mention the source beside each count.
+- Do not average or guess employee counts.
+
+ADDRESS RULES:
+
+- Distinguish between:
+  - Registered Office
+  - Corporate Office
+  - Headquarters
+
+- If multiple addresses exist:
+  show all addresses with labels.
+
+Example:
+
+Registered Office:
+...
+
+Corporate Office:
+...
+
+Headquarters:
+...
+
 COMPANY & FACTUAL INFORMATION:
 - Use SEARCH RESULTS as the primary source of truth.
 - When users ask follow-up questions such as:
@@ -198,6 +341,32 @@ RESPONSE STYLE:
 - For company questions, show names, addresses, directors, and contact information clearly.
 - For coding questions, provide code first, then explanation.
 
+If the user asks:
+
+- what type of company
+- company type
+- industry
+- what does this company do
+- business category
+- services
+- Short Company Overview
+- Employee Count (if available)
+Do not answer in 2-3 lines.
+
+Then identify the company's industry,
+business domain and services from search results.
+
+Do not classify a company based on a single
+LinkedIn post or article.
+
+Prefer:
+- Official website
+- LinkedIn company profile
+- Tracxn
+- Crunchbase
+- TheCompanyCheck
+- MCA
+
 and a company was discussed earlier,
 
 assume the question refers to the same company.
@@ -220,7 +389,7 @@ ${searchContext}
 
         temperature: 0.2,
 
-        max_tokens: 1024,
+        max_tokens: 2048,
       });
 
     res.json({
