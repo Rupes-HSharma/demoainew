@@ -12,6 +12,22 @@
   text-align: left;
   width: 20%;
 }
+.logo {
+margin:9px;
+}
+.header{
+     font-family: "Montserrat", sans-serif;
+     text-transform: uppercase;
+       font-weight: 900;
+       font-size:12px;
+}
+.logo h3{
+   font-family: "Montserrat", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+  color: #fff;
+}
 .new-chat-btn{
       background: #19c37d;
     padding: 9px 10px;
@@ -85,9 +101,9 @@ body {
 
   padding: 7px;
 
-  font-size: 18px;
+  font-size: 14px;
 
-  font-weight: normal;
+  font-weight: 800;
 
   color: white;
 

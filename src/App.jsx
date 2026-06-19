@@ -517,6 +517,9 @@ if (!response.ok) {
 
       {/* SIDEBAR */}
       <div className="sidebar">
+        <div className="logo">
+          <h3>Lumina</h3>
+        </div>
 
         <button
           className="new-chat-btn"
@@ -605,7 +608,7 @@ if (!response.ok) {
 
         {/* HEADER */}
         <div className="header">
-          AI Assistant
+          Lumina AI Assistant
         </div>
 
 
