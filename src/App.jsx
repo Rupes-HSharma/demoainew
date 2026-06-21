@@ -1,3 +1,14 @@
+import { db } from "./firebase";
+
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  query,
+  limit,
+  setDoc
+} from "firebase/firestore";
 
 import {
   useEffect,
@@ -34,6 +45,7 @@ function App() {
 
   const fileInputRef =
     useRef(null);
+
 
 
   // LOAD CHATS
@@ -105,18 +117,77 @@ function App() {
 
   }, []);
 
+ const saveChatsToFirebase = async (chats) => {
+  try {
+    await setDoc(
+      doc(db, "chats", "mainChat"),
+      {
+        chats,
+        updatedAt: Date.now()
+      }
+    );
+
+    console.log("Firebase updated");
+  } catch (err) {
+    console.error(err);
+  }
+};
+if (allChats.length > 0) {
+  
+  localStorage.setItem(
+    "all-ai-chats",
+    JSON.stringify(allChats)
+  );
+console.log(
+  "ALL CHATS DATA:",
+  JSON.stringify(allChats, null, 2)
+);
+  saveChatsToFirebase(allChats);
+}
 
   // SAVE CHATS
+const loadChatsFromFirebase =
+  async () => {
+    try {
+      const snapshot =
+        await getDocs(
+          collection(
+            db,
+            "chats"
+          )
+        );
+
+      const chats =
+        snapshot.docs.map(
+          (doc) =>
+            doc.data()
+        );
+
+      console.log(
+        "Firebase Chats:",
+        chats
+      );
+
+      return chats;
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
+  };
+
+
   useEffect(() => {
 
-    if (allChats.length > 0) {
+ if (allChats.length > 0) {
+  localStorage.setItem(
+    "all-ai-chats",
+    JSON.stringify(allChats)
+  );
 
-      localStorage.setItem(
-        "all-ai-chats",
-
-        JSON.stringify(allChats)
-      );
-    }
+  saveChatsToFirebase(
+    allChats
+  );
+}
 
   }, [allChats]);
 

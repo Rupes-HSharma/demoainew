@@ -17,8 +17,8 @@ margin:9px;
 }
 .header{
      font-family: "Montserrat", sans-serif;
-     text-transform: uppercase;
-       font-weight: 900;
+   
+   
        font-size:12px;
 }
 .logo h3{
@@ -103,7 +103,7 @@ body {
 
   font-size: 14px;
 
-  font-weight: 800;
+  font-weight: 700;
 
   color: white;
 
