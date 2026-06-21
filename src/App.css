@@ -51,6 +51,9 @@ margin:9px;
     box-sizing: border-box;
     white-space: nowrap;
 }
+.history-item.active {
+  background-color: #19c37d;
+}
 .app {
  
     align-items: baseline !important;
