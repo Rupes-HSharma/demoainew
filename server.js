@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";
-
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
@@ -28,6 +28,13 @@ const tvly = tavily({
   apiKey: process.env.TAVILY_API_KEY,
 });
 
+const genAI = new GoogleGenerativeAI(
+  process.env.GEMINI_API_KEY
+);
+
+const geminiModel = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+});
 
 
 
@@ -89,7 +96,7 @@ app.post("/chat", async (req, res) => {
           { role: "system", content: "You are a friendly assistant. Reply briefly and naturally to small talk." },
           ...messages.slice(-4).map((msg) => ({ role: msg.role, content: msg.content })),
         ],
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         temperature: 0.5,
         max_tokens: 100,
       });
@@ -353,7 +360,7 @@ app.post("/chat", async (req, res) => {
 
       const finalResults =
         relevantResults.length > 0 ? relevantResults : dedupedResults;
- 
+
       const isAddressQuery = lowerQ.includes("address") || lowerQ.includes("location");
       if (isAddressQuery) {
         finalResults.sort((a, b) => {
@@ -389,14 +396,18 @@ app.post("/chat", async (req, res) => {
       );
     }
 
-    const response =
-      await groq.chat.completions.create({
+    let aiReply = "";
 
-        messages: [
+    try {
+    
+      const response =
+        await groq.chat.completions.create({
 
-          {
-            role: "system",
-            content: `
+          messages: [
+
+            {
+              role: "system",
+              content: `
 You are an intelligent AI assistant.
 
 CURRENT DATE: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -475,26 +486,61 @@ Never interpret words like "current" as a company name unless the conversation i
 SEARCH RESULTS:
 ${searchContext}
 `,
-          },
+            },
 
-          ...messages.slice(-6).map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
+            ...messages.slice(-6).map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            })),
 
-        ],
+          ],
 
-        model: "llama-3.3-70b-versatile",
+          model: "llama-3.1-8b-instant",
+          temperature: 0.2,
+          max_tokens: 2048,
+        });
 
-        temperature: 0.2,
+      aiReply =
+        response.choices[0].message.content;
 
-        max_tokens: 2048,
-      });
+      console.log("Using GROQ");
+
+    } catch (err) {
+
+      console.log(
+        "Groq failed, switching to Gemini"
+      );
+
+      const finalPrompt = `
+SEARCH RESULTS:
+${searchContext}
+
+CONVERSATION:
+${messages
+          .slice(-6)
+          .map(
+            (m) =>
+              `${m.role}: ${m.content}`
+          )
+          .join("\n")}
+
+USER:
+${latestQuestion}
+`;
+
+      const result =
+        await geminiModel.generateContent(
+          finalPrompt
+        );
+
+      aiReply =
+        result.response.text();
+
+      console.log("Using GEMINI");
+    }
 
     res.json({
-      reply:
-        response.choices[0]
-          .message.content,
+      reply: aiReply,
     });
 
   } catch (error) {
@@ -521,74 +567,74 @@ ${searchContext}
 });
 
 
-// IMAGE GENERATOR
-app.post(
-  "/generate-image",
-  async (req, res) => {
+  // IMAGE GENERATOR
+  app.post(
+    "/generate-image",
+    async (req, res) => {
 
-    try {
+      try {
 
-      const { prompt } =
-        req.body;
+        const { prompt } =
+          req.body;
 
-      res.json({
+        res.json({
 
-        image:
-          `https://placehold.co/600x400?text=${encodeURIComponent(
-            prompt
-          )}`,
-      });
+          image:
+            `https://placehold.co/600x400?text=${encodeURIComponent(
+              prompt
+            )}`,
+        });
 
-    } catch (error) {
+      } catch (error) {
 
-      console.log(error);
+        console.log(error);
 
-      res.status(500).json({
+        res.status(500).json({
 
-        error:
-          error.message,
-      });
+          error:
+            error.message,
+        });
+      }
     }
-  }
-);
+  );
 
 
-// VOICE API
-app.post(
-  "/voice",
-  async (req, res) => {
+  // VOICE API
+  app.post(
+    "/voice",
+    async (req, res) => {
 
-    try {
+      try {
 
-      res.json({
+        res.json({
 
-        text:
-          "Voice feature working",
-      });
+          text:
+            "Voice feature working",
+        });
 
-    } catch (error) {
+      } catch (error) {
 
-      console.log(error);
+        console.log(error);
 
-      res.status(500).json({
+        res.status(500).json({
 
-        error:
-          error.message,
-      });
+          error:
+            error.message,
+        });
+      }
     }
-  }
-);
+  );
 
 
-// START SERVER
-const PORT =
-  process.env.PORT || 5000;
+  // START SERVER
+  const PORT =
+    process.env.PORT || 5000;
 
-app.listen(
-  PORT,
-  () => {
-    console.log(
-      `Server Running On ${PORT}`
-    );
-  }
-);
+  app.listen(
+    PORT,
+    () => {
+      console.log(
+        `Server Running On ${PORT}`
+      );
+    }
+  );
