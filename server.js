@@ -63,7 +63,7 @@ function guessDomainTokens(name) {
 app.post("/chat", async (req, res) => {
   try {
 
-    const { messages } = req.body;
+    const { messages, userLocation } = req.body;
 
     if (
       !messages ||
@@ -78,6 +78,140 @@ app.post("/chat", async (req, res) => {
     const latestQuestion =
       messages[messages.length - 1]
         ?.content || "";
+
+    // ---- SMALL TALK SHORT-CIRCUIT ----
+    // Greetings/small talk don't need any search at all — saves API
+    // calls and avoids irrelevant context being injected.
+    const smallTalkPattern = /^(hi|hii+|hello+|hey+|yo|good morning|good evening|good afternoon|thanks|thank you|ok|okay|bye|good night)\s*[!.?]*$/i;
+    if (smallTalkPattern.test(latestQuestion.trim())) {
+      const smallTalkResponse = await groq.chat.completions.create({
+        messages: [
+          { role: "system", content: "You are a friendly assistant. Reply briefly and naturally to small talk." },
+          ...messages.slice(-4).map((msg) => ({ role: msg.role, content: msg.content })),
+        ],
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.5,
+        max_tokens: 100,
+      });
+      return res.json({ reply: smallTalkResponse.choices[0].message.content });
+    }
+    // ---- END SMALL TALK SHORT-CIRCUIT ----
+
+    // ---- WEATHER SHORT-CIRCUIT ----
+    // Weather questions should NEVER go through Tavily text search;
+    // they need a real weather API + the user's actual location.
+    const weatherKeywords = ["weather", "temperature", "rain", "forecast", "climate today"];
+    const currentHasWeatherKeyword = weatherKeywords.some((k) => latestQuestion.toLowerCase().includes(k));
+
+    // Detect a weather FOLLOW-UP: previous user/assistant turn was about
+    // weather, and the current message is short (likely just a city
+    // name, e.g. "noida") with no other topic keyword in it.
+    const lastFewMessages = messages.slice(-4).map((m) => m.content?.toLowerCase() || "").join(" ");
+    const previousWasWeather = weatherKeywords.some((k) => lastFewMessages.includes(k));
+    const otherTopicKeywords = ["director", "employee", "address", "location", "contact", "phone", "email", "industry", "business", "services", "code", "function", "company"];
+    // words that are NOT city names but are short, so must be excluded
+    // or "today date", "thank you", "ok bye" etc get mistaken for a city follow-up
+    const nonCityWords = ["date", "time", "day", "today", "now", "yesterday", "tomorrow", "yes", "no", "ok", "okay", "thanks", "thank", "please", "bye", "hi", "hello", "who", "what", "when", "where", "why", "how", "is", "are", "current"];
+    const wordsInQuestion = latestQuestion.trim().toLowerCase().split(/\s+/);
+    const containsNonCityWord = wordsInQuestion.some((w) => nonCityWords.includes(w));
+    const looksLikeBareCityFollowup =
+      previousWasWeather &&
+      !currentHasWeatherKeyword &&
+      wordsInQuestion.length <= 3 &&
+      !containsNonCityWord &&
+      !otherTopicKeywords.some((k) => latestQuestion.toLowerCase().includes(k));
+
+    const isWeatherQuery = currentHasWeatherKeyword || looksLikeBareCityFollowup;
+
+    if (isWeatherQuery) {
+      try {
+        // 1. figure out city: explicit "weather in X" phrasing > bare
+        // city follow-up (current message itself IS the city) > IP fallback
+        let cityName;
+        const cityMatch = latestQuestion.match(/weather (?:in|at|of|for)\s+([A-Za-z\s]+)/i);
+        if (cityMatch) {
+          cityName = cityMatch[1].trim();
+        } else if (looksLikeBareCityFollowup) {
+          cityName = latestQuestion.trim();
+        }
+
+        let lat, lon, placeName;
+
+        if (cityName) {
+          const geoRes = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1`
+          );
+          const geoData = await geoRes.json();
+          if (geoData.results?.[0]) {
+            lat = geoData.results[0].latitude;
+            lon = geoData.results[0].longitude;
+            placeName = geoData.results[0].name;
+          }
+        }
+
+        if (lat === undefined && userLocation?.lat && userLocation?.lon) {
+          lat = userLocation.lat;
+          lon = userLocation.lon;
+          placeName = "your location";
+        }
+
+        if (lat === undefined) {
+          // Simple, no-permission-needed fallback: detect location from
+          // the request's IP address using ip-api.com (free, no key).
+          try {
+            let clientIp =
+              req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+              req.socket.remoteAddress ||
+              "";
+            // strip IPv6 prefix if present
+            clientIp = clientIp.replace("::ffff:", "");
+
+            // ip-api.com auto-detects the caller's IP if you call it
+            // without an IP (works great in production behind a real
+            // public IP; on localhost it just returns server's own IP).
+            const ipUrl = clientIp && clientIp !== "127.0.0.1" && clientIp !== "::1"
+              ? `http://ip-api.com/json/${clientIp}`
+              : `http://ip-api.com/json/`;
+
+            const ipRes = await fetch(ipUrl);
+            const ipData = await ipRes.json();
+
+            if (ipData.status === "success") {
+              lat = ipData.lat;
+              lon = ipData.lon;
+              placeName = ipData.city || "your location";
+            }
+          } catch (ipErr) {
+            console.log("IP Geolocation Error:", ipErr);
+          }
+        }
+
+        if (lat !== undefined && lon !== undefined) {
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
+          );
+          const weatherData = await weatherRes.json();
+
+          const reply = `Weather for ${placeName}:\n\n` +
+            `Current temperature: ${weatherData.current?.temperature_2m}°C\n` +
+            `Wind speed: ${weatherData.current?.wind_speed_10m} km/h\n` +
+            `Today's high/low: ${weatherData.daily?.temperature_2m_max?.[0]}°C / ${weatherData.daily?.temperature_2m_min?.[0]}°C`;
+
+          return res.json({ reply });
+        } else {
+          return res.json({
+            reply:
+              "Mujhe aapka location detect nahi ho paaya. Please city ka naam bata dein (e.g. 'weather in Noida').",
+          });
+        }
+      } catch (weatherErr) {
+        console.log("Weather API Error:", weatherErr);
+        return res.json({
+          reply: "Weather service abhi available nahi hai, please try again.",
+        });
+      }
+    }
+    // ---- END WEATHER SHORT-CIRCUIT ----
 
     let searchQuery = latestQuestion;
 
@@ -139,28 +273,39 @@ app.post("/chat", async (req, res) => {
 
       const domainTokens = guessDomainTokens(companyName);
 
-      
-      const [broadResults, directoryResults] = await Promise.all([
+      // FIX: don't hard-restrict to a guessed (often wrong) domain.
+      // Also: only run the company-directory-restricted search when a
+      // company is actually involved — running it for general
+      // questions ("capital of france", "who is the PM") just wastes
+      // an API call and can pollute context with irrelevant results.
+      const searchPromises = [
         tvly.search(searchQuery, {
           searchDepth: "advanced",
           maxResults: 10,
         }),
-        tvly.search(searchQuery, {
-          searchDepth: "advanced",
-          maxResults: 10,
-          includeDomains: [
-            "zaubacorp.com",
-            "thecompanycheck.com",
-            "tracxn.com",
-            "crunchbase.com",
-            "linkedin.com",
-          ],
-        }),
-      ]);
+      ];
+
+      if (companyName) {
+        searchPromises.push(
+          tvly.search(searchQuery, {
+            searchDepth: "advanced",
+            maxResults: 10,
+            includeDomains: [
+              "zaubacorp.com",
+              "thecompanycheck.com",
+              "tracxn.com",
+              "crunchbase.com",
+              "linkedin.com",
+            ],
+          })
+        );
+      }
+
+      const [broadResults, directoryResults] = await Promise.all(searchPromises);
 
       const allResults = [
         ...(broadResults.results || []),
-        ...(directoryResults.results || []),
+        ...(directoryResults?.results || []),
       ];
 
       // de-dupe by URL
@@ -225,13 +370,13 @@ app.post("/chat", async (req, res) => {
       }
 
       searchContext = finalResults
-        .slice(0, 6)
+        .slice(0, 3)
         .map(
           (r, index) => `
           SOURCE ${index + 1}
           TITLE: ${r.title}
           URL: ${r.url}
-          CONTENT: ${(r.content || "").substring(0, 2500)}
+          CONTENT: ${(r.content || "").substring(0, 700)}
 `
         )
         .join("\n\n");
@@ -253,6 +398,13 @@ app.post("/chat", async (req, res) => {
             role: "system",
             content: `
 You are an intelligent AI assistant.
+
+CURRENT DATE: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+Use this as "today" / "current" whenever the user asks about current dates, ages, deadlines, or recent events. Do not rely on your training data for anything time-sensitive (current office holders, prices, scores, recent news) — only trust SEARCH RESULTS for those.
+
+GENERAL ACCURACY RULE:
+- If the question is about a current/changing fact (who currently holds a position, current price, recent event, this year's something) and SEARCH RESULTS do not clearly answer it, say plainly that you don't have reliable up-to-date information instead of guessing from memory.
+- If SEARCH RESULTS are empty or irrelevant to the question, say so honestly rather than fabricating an answer.
 
 GENERAL RULES:
 - Maintain conversation context from previous messages.

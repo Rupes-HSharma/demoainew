@@ -309,6 +309,29 @@ const createNewChat = () => {
     }
   };
 
+  // GET USER LOCATION (precise browser GPS; falls back silently)
+  const getUserLocation = () => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          });
+        },
+        () => {
+          resolve(null);
+        },
+        { timeout: 5000 }
+      );
+    });
+  };
+
   // SEND MESSAGE
  const sendMessage = async () => {
 console.log("currentChatId:", currentChatId);
@@ -355,6 +378,7 @@ const response = await fetch(API_URL, {
   },
  body: JSON.stringify({
   messages: updatedUserMessages,
+  userLocation: await getUserLocation(),
 }),
 });
 if (!response.ok) {
