@@ -371,14 +371,28 @@ console.log("currentChatId:", currentChatId);
     ? "http://localhost:5000/chat"
     : "https://ai-demo-new-1.onrender.com/chat";
 
+   const hasCity =
+  /\b(in|at|of|for)\s+[a-zA-Z]/i.test(message);
+
+const isWeatherQuery =
+  /weather|temperature|forecast|rain|mausam/i.test(message);
+
+let userLocation = null;
+
+// Sirf tab location lo jab weather query hai
+// aur user ne city nahi likhi.
+if (isWeatherQuery && !hasCity) {
+  userLocation = await getUserLocation();
+}
+
 const response = await fetch(API_URL, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
   },
- body: JSON.stringify({
+body: JSON.stringify({
   messages: updatedUserMessages,
-  userLocation: await getUserLocation(),
+  userLocation,
 }),
 });
 if (!response.ok) {

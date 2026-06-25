@@ -42,7 +42,7 @@ margin:9px;
 .history-item{
     background: #919392;
     padding: 1px 10px;
-    width: 92%;
+    width: 95%;
     border: none;
     color: #fff;
     font-size: 14px;
@@ -441,8 +441,29 @@ text-align: left;
   align-items:center;
 }
 
+.chat-history{
+  overflow: auto;
+    height: calc(100vh - 146px);
+    scrollbar-width: thin;
+    
+    overflow-x: hidden;
+}
+ /* width */
+::-webkit-scrollbar {
+  width: 10px;
+}
 
+/* Track */
+::-webkit-scrollbar-track {
+  background: #f1f1f1; 
+}
+ 
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #888; 
+}
 
+ 
 /* MOBILE */
 @media (max-width: 768px) {
 

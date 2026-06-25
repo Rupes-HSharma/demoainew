@@ -86,6 +86,30 @@ app.post("/chat", async (req, res) => {
       messages[messages.length - 1]
         ?.content || "";
 
+        const isMathQuery =
+  /^[0-9+\-*/().\s=]+$/.test(
+    latestQuestion.trim()
+  );
+
+if (isMathQuery) {
+  try {
+
+    const result = Function(
+      `"use strict"; return (${latestQuestion.replace("=", "")})`
+    )();
+
+    return res.json({
+      reply: `${result}`,
+    });
+
+  } catch {
+
+    return res.json({
+      reply: "Invalid calculation",
+    });
+  }
+}
+
     // ---- SMALL TALK SHORT-CIRCUIT ----
     // Greetings/small talk don't need any search at all — saves API
     // calls and avoids irrelevant context being injected.
@@ -96,7 +120,7 @@ app.post("/chat", async (req, res) => {
           { role: "system", content: "You are a friendly assistant. Reply briefly and naturally to small talk." },
           ...messages.slice(-4).map((msg) => ({ role: msg.role, content: msg.content })),
         ],
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         temperature: 0.5,
         max_tokens: 100,
       });
@@ -105,20 +129,43 @@ app.post("/chat", async (req, res) => {
     // ---- END SMALL TALK SHORT-CIRCUIT ----
 
     // ---- WEATHER SHORT-CIRCUIT ----
-    // Weather questions should NEVER go through Tavily text search;
-    // they need a real weather API + the user's actual location.
-    const weatherKeywords = ["weather", "temperature", "rain", "forecast", "climate today"];
-    const currentHasWeatherKeyword = weatherKeywords.some((k) => latestQuestion.toLowerCase().includes(k));
+
+    const weatherPatterns = [
+      "weather",
+      "temperature",
+      "forecast",
+      "rain",
+      "humidity",
+      "wind",
+      "climate",
+      "mausam",
+      "mosam",
+      "baarish",
+      "barish",
+      "garmi",
+      "sardi",
+    ];
+
+    const lowerLatest = latestQuestion.toLowerCase();
+    const currentHasWeatherKeyword = weatherPatterns.some((pattern) =>
+      lowerLatest.includes(pattern)
+    );
 
     // Detect a weather FOLLOW-UP: previous user/assistant turn was about
     // weather, and the current message is short (likely just a city
     // name, e.g. "noida") with no other topic keyword in it.
-    const lastFewMessages = messages.slice(-4).map((m) => m.content?.toLowerCase() || "").join(" ");
-    const previousWasWeather = weatherKeywords.some((k) => lastFewMessages.includes(k));
+    const lastFewMessages = messages
+      .slice(-4)
+      .map((m) => m.content?.toLowerCase() || "")
+      .join(" ");
+    const previousWasWeather = weatherPatterns.some((pattern) =>
+      lastFewMessages.includes(pattern)
+    );
+
     const otherTopicKeywords = ["director", "employee", "address", "location", "contact", "phone", "email", "industry", "business", "services", "code", "function", "company"];
     // words that are NOT city names but are short, so must be excluded
     // or "today date", "thank you", "ok bye" etc get mistaken for a city follow-up
-    const nonCityWords = ["date", "time", "day", "today", "now", "yesterday", "tomorrow", "yes", "no", "ok", "okay", "thanks", "thank", "please", "bye", "hi", "hello", "who", "what", "when", "where", "why", "how", "is", "are", "current"];
+    const nonCityWords = ["date", "time", "day", "today", "now", "yesterday", "tomorrow", "yes", "no", "ok", "okay", "thanks", "thank", "please", "bye", "hi", "hello", "who", "what", "when", "where", "why", "how", "is", "are", "current", "aaj", "kal", "kya", "hai", "hogi", "hoga", "me", "mein"];
     const wordsInQuestion = latestQuestion.trim().toLowerCase().split(/\s+/);
     const containsNonCityWord = wordsInQuestion.some((w) => nonCityWords.includes(w));
     const looksLikeBareCityFollowup =
@@ -126,29 +173,73 @@ app.post("/chat", async (req, res) => {
       !currentHasWeatherKeyword &&
       wordsInQuestion.length <= 3 &&
       !containsNonCityWord &&
-      !otherTopicKeywords.some((k) => latestQuestion.toLowerCase().includes(k));
+      !otherTopicKeywords.some((k) => lowerLatest.includes(k));
 
     const isWeatherQuery = currentHasWeatherKeyword || looksLikeBareCityFollowup;
 
     if (isWeatherQuery) {
       try {
-        // 1. figure out city: explicit "weather in X" phrasing > bare
-        // city follow-up (current message itself IS the city) > IP fallback
-        let cityName;
-        const cityMatch = latestQuestion.match(/weather (?:in|at|of|for)\s+([A-Za-z\s]+)/i);
-        if (cityMatch) {
-          cityName = cityMatch[1].trim();
-        } else if (looksLikeBareCityFollowup) {
+        // "near me" / "mere paas" => always use device/IP location, never
+        // try to extract a city name out of the sentence.
+        const nearMePattern = /near me|mere\s+(paas|yaha|nazdeek)/i;
+        const isNearMeQuery = nearMePattern.test(latestQuestion);
+
+        // "kal"/"tomorrow" => show tomorrow's forecast instead of current
+        // weather. If "aaj"/"today" is also present, treat as today.
+        const isTomorrowQuery =
+          /\b(tomorrow|kal)\b/i.test(latestQuestion) &&
+          !/\b(today|aaj)\b/i.test(latestQuestion);
+
+        // 1. figure out city: explicit phrasing (English or Hinglish) >
+        // bare city follow-up (current message itself IS the city) > IP fallback
+        let cityName = null;
+
+        if (!isNearMeQuery) {
+          const cityPatterns = [
+            // "weather/temperature/forecast in/at/of/for Noida"
+            /(?:weather|temperature|forecast|climate|humidity|wind)\s+(?:in|at|of|for)\s+([a-zA-Z\s]+?)(?:\s+(?:today|tomorrow|now|please)\b|[?.!]|$)/i,
+            // "mausam Patna" / "mausam Patna me"
+            /(?:mausam|mosam)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\b/i,
+            // "Noida me kitni garmi hai" / "Bangalore me baarish hogi"
+            /\b([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s+me(?:in)?\s+(?:kitni|kya|aaj|kal)?\s*(?:garmi|baarish|barish|sardi|mausam|mosam)/i,
+            // "rain/weather in Mumbai tomorrow"
+            /(?:rain|weather|temperature)\s+(?:in|at)\s+([a-zA-Z\s]+?)\s+(?:today|tomorrow)\b/i,
+          ];
+
+          for (const pattern of cityPatterns) {
+            const match = latestQuestion.match(pattern);
+            if (match && match[1]) {
+              cityName = match[1].trim();
+              break;
+            }
+          }
+        }
+
+        if (!cityName && looksLikeBareCityFollowup) {
           cityName = latestQuestion.trim();
+        }
+
+        // strip stray time/filler words that sometimes leak into the match
+        if (cityName) {
+          cityName = cityName
+            .replace(/\b(today|tomorrow|now|please|aaj|kal|kya|hai|hogi|hoga)\b/gi, "")
+            .trim();
+          if (!cityName) cityName = null;
         }
 
         let lat, lon, placeName;
 
         if (cityName) {
+          console.log("Detected City:", cityName);
+
           const geoRes = await fetch(
             `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1`
           );
+
           const geoData = await geoRes.json();
+
+          console.log("Geo Data:", geoData);
+
           if (geoData.results?.[0]) {
             lat = geoData.results[0].latitude;
             lon = geoData.results[0].longitude;
@@ -176,7 +267,7 @@ app.post("/chat", async (req, res) => {
             // ip-api.com auto-detects the caller's IP if you call it
             // without an IP (works great in production behind a real
             // public IP; on localhost it just returns server's own IP).
-            const ipUrl = clientIp && clientIp !== "127.0.0.1" && clientIp !== "::1"
+            const ipUrl = clientIp
               ? `http://ip-api.com/json/${clientIp}`
               : `http://ip-api.com/json/`;
 
@@ -195,14 +286,27 @@ app.post("/chat", async (req, res) => {
 
         if (lat !== undefined && lon !== undefined) {
           const weatherRes = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
           );
           const weatherData = await weatherRes.json();
 
-          const reply = `Weather for ${placeName}:\n\n` +
-            `Current temperature: ${weatherData.current?.temperature_2m}°C\n` +
-            `Wind speed: ${weatherData.current?.wind_speed_10m} km/h\n` +
-            `Today's high/low: ${weatherData.daily?.temperature_2m_max?.[0]}°C / ${weatherData.daily?.temperature_2m_min?.[0]}°C`;
+          let reply;
+
+          if (isTomorrowQuery) {
+            reply = `🌤️ Weather for ${placeName} (Tomorrow)
+
+📈 High: ${weatherData.daily?.temperature_2m_max?.[1]}°C
+📉 Low: ${weatherData.daily?.temperature_2m_min?.[1]}°C
+🌧️ Rain Chance: ${weatherData.daily?.precipitation_probability_max?.[1] ?? "N/A"}%`;
+          } else {
+            reply = `🌤️ Weather for ${placeName}
+
+🌡️ Current Temperature: ${weatherData.current?.temperature_2m}°C
+💧 Humidity: ${weatherData.current?.relative_humidity_2m}%
+💨 Wind Speed: ${weatherData.current?.wind_speed_10m} km/h
+📈 High: ${weatherData.daily?.temperature_2m_max?.[0]}°C
+📉 Low: ${weatherData.daily?.temperature_2m_min?.[0]}°C`;
+          }
 
           return res.json({ reply });
         } else {
@@ -212,9 +316,10 @@ app.post("/chat", async (req, res) => {
           });
         }
       } catch (weatherErr) {
-        console.log("Weather API Error:", weatherErr);
+        console.error("Weather API Error:", weatherErr);
+
         return res.json({
-          reply: "Weather service abhi available nahi hai, please try again.",
+          reply: "Weather service is temporarily unavailable. Please try again later.",
         });
       }
     }
@@ -262,7 +367,7 @@ app.post("/chat", async (req, res) => {
       )
     ) {
       if (lowerQ.includes("director")) {
-        searchQuery = `${companyName} directors MCA Zaubacorp`;
+        searchQuery = `${companyName} MCA directors Zaubacorp`;
       } else if (lowerQ.includes("employee")) {
         searchQuery = `${companyName} employee count linkedin tracxn`;
       } else if (lowerQ.includes("address") || lowerQ.includes("location")) {
@@ -274,8 +379,15 @@ app.post("/chat", async (req, res) => {
       }
     }
 
+    const needsSearch =
+  /director|address|location|current|latest|news|price|population|who is|contact|email|phone|employee/i.test(
+    latestQuestion
+  );
+  
     let searchContext = "";
 
+    
+ 
     try {
 
       const domainTokens = guessDomainTokens(companyName);
@@ -388,7 +500,9 @@ app.post("/chat", async (req, res) => {
         )
         .join("\n\n");
 
-    } catch (searchError) {
+    } 
+    
+    catch (searchError) {
 
       console.log(
         "Tavily Error:",
@@ -408,82 +522,30 @@ app.post("/chat", async (req, res) => {
             {
               role: "system",
               content: `
-You are an intelligent AI assistant.
+              You are Lumina AI, an intelligent assistant.
+CURRENT DATE:
+${new Date().toLocaleDateString("en-IN", {
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric"
+})}
+Never call Founder, CEO, CTO, COO or Employee a Director unless SEARCH RESULTS explicitly identify them as Director.
+RULES:
 
-CURRENT DATE: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-Use this as "today" / "current" whenever the user asks about current dates, ages, deadlines, or recent events. Do not rely on your training data for anything time-sensitive (current office holders, prices, scores, recent news) — only trust SEARCH RESULTS for those.
-
-GENERAL ACCURACY RULE:
-- If the question is about a current/changing fact (who currently holds a position, current price, recent event, this year's something) and SEARCH RESULTS do not clearly answer it, say plainly that you don't have reliable up-to-date information instead of guessing from memory.
-- If SEARCH RESULTS are empty or irrelevant to the question, say so honestly rather than fabricating an answer.
-
-GENERAL RULES:
-- Maintain conversation context from previous messages.
-- Understand follow-up questions based on earlier discussion.
-- Never lose the topic unless the user changes it.
-- Be concise but accurate.
-
-CODING RULES:
-- Continue in the same technology currently being discussed.
-- If the conversation is about React, provide React code.
-- If the conversation is about Node.js, provide Node.js code.
-- Do not switch to HTML, Java, Python, or another language unless requested.
-- Prefer complete working examples over partial snippets.
-
-For company information:
-
-- Prefer official company websites.
-- Prefer MCA, ZaubaCorp, Tracxn, Crunchbase.
-- If multiple addresses are found, list all addresses.
-- Do not choose one address unless all sources agree.
-- If directors are found, list every director found.
-
-CURRENT ADDRESS RULE:
-
-If the user asks current address / current location / office address / headquarters:
-
-Priority order:
-1. Official Website "Contact Us" page
-2. LinkedIn Company Page
-3. Registered Office (MCA / ZaubaCorp) — use ONLY if nothing else is available, and label it clearly as "Registered Office" (not "current office").
-
-If multiple addresses exist, show all addresses with clear labels:
-
-Registered Office:
-...
-
-Corporate Office:
-...
-
-Headquarters:
-...
-
-DIRECTOR RULES:
-- Only list people explicitly identified as Directors.
-- Do NOT treat CEO/Founder/COO/VP/President/CGO/Managers as Directors unless the source explicitly says so.
-- For Indian companies, prefer MCA and ZaubaCorp director records over leadership pages.
-
-EMPLOYEE COUNT RULES:
-- Prefer LinkedIn and Tracxn employee counts.
-- If multiple counts exist, show all counts with source.
-- Do not average or guess.
-
-CRITICAL FACT RULE:
-- Only use information explicitly present inside SEARCH RESULTS.
-- Never infer industry, services, employee count, or headquarters.
-- If not explicitly present, say so plainly instead of guessing.
-
-SOURCE HANDLING:
-- If multiple sources disagree, mention all and state that sources conflict.
+- Maintain conversation context.
+- Understand follow-up questions.
+- Answer naturally like ChatGPT.
+- Be concise unless user asks for details.
 - Never invent facts.
-
-RESPONSE STYLE:
-- Direct answer first, then bullet points for lists.
-- For company type/industry/services questions, give a proper paragraph (not 2-3 lines) based on search results.
-
-Never interpret words like "current" as a company name unless the conversation is specifically about a company literally named "Current".
+- Use SEARCH RESULTS only when they contain relevant information.
+- If SEARCH RESULTS are empty, answer using your own knowledge.
+- For coding, always continue in the same programming language already being discussed.
+- For calculations, always calculate accurately.
+- For weather/location questions, prefer the dedicated weather/location logic if available.
 
 SEARCH RESULTS:
+
 ${searchContext}
 `,
             },
@@ -495,7 +557,7 @@ ${searchContext}
 
           ],
 
-          model: "llama-3.1-8b-instant",
+     model: "llama-3.3-70b-versatile",
           temperature: 0.2,
           max_tokens: 2048,
         });
