@@ -412,11 +412,15 @@ text-align: left;
 }
 
 .delete-chat-btn{
-  background:none;
-  border:none;
-  color:#ff4d4d;
-  cursor:pointer;
-  font-size:14px;
+    color: #a53511;
+    cursor: pointer;
+    background: 0 0;
+    border: none;
+    font-size: 14px;
+    background: #fff;
+    padding: 4px 3px 1px 3px;
+    border-radius: 5px;
+ 
 }
 
 .delete-chat-btn:hover{
