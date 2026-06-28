@@ -448,21 +448,7 @@ text-align: left;
     
     overflow-x: hidden;
 }
- /* width */
-::-webkit-scrollbar {
-  width: 10px;
-}
-
-/* Track */
-::-webkit-scrollbar-track {
-  background: #f1f1f1; 
-}
  
-/* Handle */
-::-webkit-scrollbar-thumb {
-  background: #888; 
-}
-
  
 /* MOBILE */
 @media (max-width: 768px) {
@@ -481,5 +467,24 @@ text-align: left;
   .header {
     font-size: 20px;
   }
+}
+
+/* Replace .sidebar with your class or use body */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #555 transparent;
+}
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+.sidebar::-webkit-scrollbar-button {
+  display: none;
 }
  
