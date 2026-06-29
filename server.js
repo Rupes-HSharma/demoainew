@@ -700,3 +700,14 @@ ${latestQuestion}
       );
     }
   );
+
+
+
+
+
+  app.get("/version", (req, res) => {
+  res.json({
+    version: "v2.0.5",
+    deployedAt: new Date().toISOString()
+  });
+});
